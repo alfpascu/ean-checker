@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Verificador de EAN</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        input[type="text"] { width: 300px; padding: 8px; }
+        input[type="submit"] { padding: 8px 16px; }
+        table { margin-top: 20px; border-collapse: collapse; width: 100%; max-width: 600px; }
+        th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h1>Verificador de EAN</h1>
+    <form method="post">
+        <label for="ean">Introduce el EAN:</label><br>
+        <input type="text" id="ean" name="ean" value="{{ ean }}" required>
+        <input type="submit" value="Verificar">
+    </form>
+
+    {% if results %}
+    <h2>Resultados para EAN: {{ ean }}</h2>
+    <table>
+        <tr><th>Tienda</th><th>Enlace</th></tr>
+        {% for tienda, enlace in results.items() %}
+        <tr>
+            <td>{{ tienda }}</td>
+            <td><a href="{{ enlace }}" target="_blank">Ver producto</a></td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+</body>
+</html>
