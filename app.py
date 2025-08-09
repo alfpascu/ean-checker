@@ -3,29 +3,29 @@ import requests
 
 app = Flask(__name__)
 
-TEMPLATE = """
+HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
     <title>Verificador de EAN</title>
     <style>
-        body { font-family: Arial; margin: 40px; }
-        table { border-collapse: collapse; width: 100%%; }
-        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        table { border-collapse: collapse; width: 100%%; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
         th { background-color: #f2f2f2; }
         input[type=text] { width: 300px; padding: 8px; }
         input[type=submit] { padding: 8px 16px; }
     </style>
 </head>
 <body>
-    <h2>Verificador de EAN</h2>
+    <h1>Verificador de EAN</h1>
     <form method="post">
         <label>Introduce el EAN:</label>
         <input type="text" name="ean" required>
         <input type="submit" value="Verificar">
     </form>
     {% if results %}
-    <h3>Resultados para EAN {{ ean }}</h3>
+    <h2>Resultados para EAN {{ ean }}</h2>
     <table>
         <tr><th>Tienda</th><th>Disponible</th><th>Enlace</th></tr>
         {% for tienda, estado, enlace in results %}
@@ -41,22 +41,27 @@ TEMPLATE = """
 </html>
 """
 
-def buscar_en_bing(ean, tienda, dominio):
-    query = f"{ean} site:{dominio}"
-    url = f"https://www.bing.com/search?q={query}"
+def buscar_en_bing(ean, tienda):
+    query = f"{ean} site:{tienda}"
     headers = {
         "User-Agent": "Mozilla/5.0"
     }
+    params = {
+        "q": query,
+        "count": 10
+    }
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        if "No results found" in response.text or "no se han encontrado resultados" in response.text.lower():
-            return "❌ No", url
-        elif "result" in response.text.lower():
-            return "✅ Sí", url
+        response = requests.get("https://www.bing.com/search", headers=headers, params=params, timeout=10)
+        if response.status_code == 200:
+            html = response.text.lower()
+            if ean in html:
+                return "✅ Sí", f"https://www.bing.com/search?q={ean}+site:{tienda}"
+            else:
+                return "❌ No", f"https://www.bing.com/search?q={ean}+site:{tienda}"
         else:
-            return "❌ No", url
+            return "⚠️ Error", f"https://www.bing.com/search?q={ean}+site:{tienda}"
     except Exception:
-        return "⚠️ Error", url
+        return "⚠️ Error", f"https://www.bing.com/search?q={ean}+site:{tienda}"
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -71,10 +76,10 @@ def index():
             "Carrefour": "carrefour.es",
             "Pixmania": "pixmania.com"
         }
-        for tienda, dominio in tiendas.items():
-            estado, enlace = buscar_en_bing(ean, tienda, dominio)
-            results.append((tienda, estado, enlace))
-    return render_template_string(TEMPLATE, results=results, ean=ean)
+        for nombre, dominio in tiendas.items():
+            estado, enlace = buscar_en_bing(ean, dominio)
+            results.append((nombre, estado, enlace))
+    return render_template_string(HTML_TEMPLATE, results=results, ean=ean)
 
 if __name__ == "__main__":
     app.run(debug=True)
