@@ -4,11 +4,34 @@ from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
+TEMPLATE = """
+<!doctype html>
+<title>EAN Checker v9</title>
+<h2>Verificador de EAN en Marketplaces</h2>
+<form method=post>
+  <input type=text name=ean placeholder="Introduce el EAN" required>
+  <input type=submit value=Verificar>
+</form>
+{% if results %}
+  <h3>Resultados para EAN {{ ean }}:</h3>
+  <table border=1 cellpadding=5>
+    <tr><th>Tienda</th><th>Disponible</th><th>Enlace</th></tr>
+    {% for tienda, estado, enlace in results %}
+      <tr>
+        <td>{{ tienda }}</td>
+        <td>{{ estado }}</td>
+        <td><a href="{{ enlace }}" target="_blank">Ver</a></td>
+      </tr>
+    {% endfor %}
+  </table>
+{% endif %}
+"""
+
 HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
-STORES = {
+TIENDAS = {
     "Amazon": "site:amazon.es",
     "PcComponentes": "site:pccomponentes.com",
     "MediaMarkt": "site:mediamarkt.es",
@@ -16,62 +39,43 @@ STORES = {
     "Pixmania": "site:pixmania.com"
 }
 
-def search_bing(ean, store_filter):
-    query = f'"{ean}" {store_filter}'
-    url = f"https://www.bing.com/search?q={requests.utils.quote(query)}"
-    response = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(response.text, "html.parser")
-    links = []
-    for a in soup.select("li.b_algo h2 a"):
-        href = a.get("href")
-        if href and store_filter.split(":")[1] in href:
-            links.append(href)
-    return links
-
-def verify_ean_in_page(url, ean):
+def buscar_en_google(ean, tienda_query):
+    query = f'"{ean}" {tienda_query}'
+    url = f"https://www.google.com/search?q={query}"
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
-        if ean in response.text:
-            return True
+        soup = BeautifulSoup(response.text, "html.parser")
+        enlaces = []
+        for g in soup.select("div.g"):
+            link_tag = g.find("a")
+            if link_tag and ean in g.text:
+                enlaces.append(link_tag["href"])
+        return enlaces
     except Exception:
-        pass
-    return False
+        return []
+
+def verificar_ean_enlace(ean, enlace):
+    try:
+        response = requests.get(enlace, headers=HEADERS, timeout=10)
+        return ean in response.text
+    except Exception:
+        return False
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    result_table = ""
+    results = []
+    ean = ""
     if request.method == "POST":
-        ean = request.form.get("ean", "").strip()
-        results = []
-        for store, filter_query in STORES.items():
-            links = search_bing(ean, filter_query)
-            found = False
-            for link in links:
-                if verify_ean_in_page(link, ean):
-                    results.append((store, "✅ Disponible", link))
-                    found = True
-                    break
-            if not found:
-                results.append((store, "❌ No disponible", links[0] if links else "—"))
-        result_table = "<table border='1'><tr><th>Tienda</th><th>Estado</th><th>Enlace</th></tr>"
-        for store, status, link in results:
-            result_table += f"<tr><td>{store}</td><td>{status}</td><td><a href='{link}' target='_blank'>Ver</a></td></tr>"
-        result_table += "</table>"
-
-    return render_template_string("""
-        <html>
-        <head><title>Verificador de EAN</title></head>
-        <body>
-            <h2>Introduce un EAN para verificar disponibilidad</h2>
-            <form method="post">
-                <input type="text" name="ean" required>
-                <input type="submit" value="Verificar">
-            </form>
-            <br>
-            {{ result_table|safe }}
-        </body>
-        </html>
-    """, result_table=result_table)
+        ean = request.form["ean"]
+        for tienda, query in TIENDAS.items():
+            enlaces = buscar_en_google(ean, query)
+            disponible = False
+            enlace_final = enlaces[0] if enlaces else "#"
+            if enlaces:
+                disponible = verificar_ean_enlace(ean, enlace_final)
+            estado = "✅ Sí" if disponible else "❌ No"
+            results.append((tienda, estado, enlace_final))
+    return render_template_string(TEMPLATE, results=results, ean=ean)
 
 if __name__ == "__main__":
     app.run(debug=True)
