@@ -1,6 +1,6 @@
 services:
-- type: web
-  name: ean-checker-v5
-  env: python
-  buildCommand: ""
-  startCommand: gunicorn app:app
+  - type: web
+    name: ean-checker
+    env: python
+    buildCommand: ""
+    startCommand: gunicorn app:app

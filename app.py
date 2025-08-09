@@ -4,67 +4,74 @@ from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-TEMPLATE = """
-<!doctype html>
-<title>EAN Checker v5</title>
-<h2>Verificador de EAN en Marketplaces</h2>
-<form method=post>
-  <input type=text name=ean placeholder="Introduce el EAN" required>
-  <input type=submit value=Verificar>
-</form>
-{% if results %}
-  <h3>Resultados para EAN {{ ean }}:</h3>
-  <table border=1 cellpadding=5>
-    <tr><th>Tienda</th><th>Disponible</th><th>Enlace</th></tr>
-    {% for tienda, estado, enlace in results %}
-      <tr>
-        <td>{{ tienda }}</td>
-        <td>{{ estado }}</td>
-        <td><a href="{{ enlace }}" target="_blank">Ver</a></td>
-      </tr>
-    {% endfor %}
-  </table>
-{% endif %}
-"""
+HEADERS = {
+    "User-Agent": "Mozilla/5.0"
+}
 
-def buscar_en_bing(ean, tienda):
-    query = f"{ean} site:{tienda}"
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-    url = f"https://www.bing.com/search?q={query}"
+STORES = {
+    "Amazon": "site:amazon.es",
+    "PcComponentes": "site:pccomponentes.com",
+    "MediaMarkt": "site:mediamarkt.es",
+    "Carrefour": "site:carrefour.es",
+    "Pixmania": "site:pixmania.com"
+}
+
+def search_bing(ean, store_filter):
+    query = f'"{ean}" {store_filter}'
+    url = f"https://www.bing.com/search?q={requests.utils.quote(query)}"
+    response = requests.get(url, headers=HEADERS)
+    soup = BeautifulSoup(response.text, "html.parser")
+    links = []
+    for a in soup.select("li.b_algo h2 a"):
+        href = a.get("href")
+        if href and store_filter.split(":")[1] in href:
+            links.append(href)
+    return links
+
+def verify_ean_in_page(url, ean):
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, "html.parser")
-        resultados = soup.select("li.b_algo")
-        for r in resultados:
-            titulo = r.select_one("h2")
-            desc = r.select_one(".b_caption p")
-            enlace = titulo.a["href"] if titulo and titulo.a else ""
-            texto = (titulo.text if titulo else "") + " " + (desc.text if desc else "")
-            if ean in texto or ean in enlace:
-                return "✅ Sí", enlace
-        return "❌ No", url
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        if ean in response.text:
+            return True
     except Exception:
-        return "⚠️ Error", url
+        pass
+    return False
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    results = []
-    ean = ""
+    result_table = ""
     if request.method == "POST":
-        ean = request.form["ean"]
-        tiendas = {
-            "Amazon": "amazon.com",
-            "PcComponentes": "pccomponentes.com",
-            "MediaMarkt": "mediamarkt.es",
-            "Carrefour": "carrefour.es",
-            "Pixmania": "pixmania.com"
-        }
-        for nombre, dominio in tiendas.items():
-            estado, enlace = buscar_en_bing(ean, dominio)
-            results.append((nombre, estado, enlace))
-    return render_template_string(TEMPLATE, results=results, ean=ean)
+        ean = request.form.get("ean", "").strip()
+        results = []
+        for store, filter_query in STORES.items():
+            links = search_bing(ean, filter_query)
+            found = False
+            for link in links:
+                if verify_ean_in_page(link, ean):
+                    results.append((store, "✅ Disponible", link))
+                    found = True
+                    break
+            if not found:
+                results.append((store, "❌ No disponible", links[0] if links else "—"))
+        result_table = "<table border='1'><tr><th>Tienda</th><th>Estado</th><th>Enlace</th></tr>"
+        for store, status, link in results:
+            result_table += f"<tr><td>{store}</td><td>{status}</td><td><a href='{link}' target='_blank'>Ver</a></td></tr>"
+        result_table += "</table>"
+
+    return render_template_string("""
+        <html>
+        <head><title>Verificador de EAN</title></head>
+        <body>
+            <h2>Introduce un EAN para verificar disponibilidad</h2>
+            <form method="post">
+                <input type="text" name="ean" required>
+                <input type="submit" value="Verificar">
+            </form>
+            <br>
+            {{ result_table|safe }}
+        </body>
+        </html>
+    """, result_table=result_table)
 
 if __name__ == "__main__":
     app.run(debug=True)
