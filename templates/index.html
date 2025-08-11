@@ -1,36 +1,22 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Verificador de EAN</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        input[type="text"] { width: 300px; padding: 8px; }
-        input[type="submit"] { padding: 8px 16px; }
-        table { margin-top: 20px; border-collapse: collapse; width: 100%; max-width: 600px; }
-        th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-        th { background-color: #f2f2f2; }
-    </style>
+    <title>EAN Checker</title>
 </head>
 <body>
-    <h1>Verificador de EAN</h1>
+    <h1>Buscar EAN en Marketplaces</h1>
     <form method="post">
-        <label for="ean">Introduce el EAN:</label><br>
-        <input type="text" id="ean" name="ean" value="{{ ean }}" required>
-        <input type="submit" value="Verificar">
+        <label for="ean">Introduce el EAN:</label>
+        <input type="text" id="ean" name="ean" required>
+        <button type="submit">Buscar</button>
     </form>
-
     {% if results %}
-    <h2>Resultados para EAN: {{ ean }}</h2>
-    <table>
-        <tr><th>Tienda</th><th>Enlace</th></tr>
-        {% for tienda, enlace in results.items() %}
-        <tr>
-            <td>{{ tienda }}</td>
-            <td><a href="{{ enlace }}" target="_blank">Ver producto</a></td>
-        </tr>
+        <h2>Resultados para EAN: {{ ean }}</h2>
+        <ul>
+        {% for name, found in results.items() %}
+            <li>{{ name }}: {{ 'Disponible' if found else 'No disponible' }}</li>
         {% endfor %}
-    </table>
+        </ul>
     {% endif %}
 </body>
 </html>
