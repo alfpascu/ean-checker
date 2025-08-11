@@ -1,1 +1,1 @@
-web: flask run
+web: gunicorn ean_checker:app
