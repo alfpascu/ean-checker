@@ -1,6 +1,6 @@
 services:
-  - type: web
-    name: ean-checker
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: flask run
+- type: web
+  name: ean-checker
+  env: python
+  buildCommand: pip install -r requirements.txt
+  startCommand: gunicorn ean_checker:app
